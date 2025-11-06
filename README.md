@@ -1,5 +1,3 @@
-# about to start something amazing
-
 # Repository structure : 
 
 ```
