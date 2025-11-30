@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pipeline Sentinel</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .stage { margin: 10px 0; padding: 10px; border: 1px solid #ccc; }
+        .success { background-color: #d4edda; }
+        .pending { background-color: #fff3cd; }
+        .failed { background-color: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>Pipeline Status Dashboard</h1>
+    {% if state_data.error %}
+        <p>Error: {{ state_data.error }}</p>
+    {% else %}
+        {% for stage in state_data.pipeline %}
+            <div class="stage {{ stage.status.lower() }}">
+                <strong>{{ stage.stage }}</strong>: {{ stage.status }} ({{ stage.timestamp }})
+            </div>
+        {% endfor %}
+    {% endif %}
+</body>
+</html>

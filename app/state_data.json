@@ -1,0 +1,19 @@
+{
+  "pipeline": [
+    {
+      "stage": "Build",
+      "status": "Success",
+      "timestamp": "2025-12-01T00:00:00Z"
+    },
+    {
+      "stage": "Test",
+      "status": "Pending",
+      "timestamp": "2025-12-01T00:01:00Z"
+    },
+    {
+      "stage": "Deploy",
+      "status": "Failed",
+      "timestamp": "2025-12-01T00:02:00Z"
+    }
+  ]
+}
