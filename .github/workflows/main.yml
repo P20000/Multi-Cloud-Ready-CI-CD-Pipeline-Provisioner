@@ -11,16 +11,14 @@ permissions:
   contents: read # Allows checking out the code
 
 env:
-  # Define standard variables used across jobs
-  AWS_REGION: us-east-1 # Change this if your EKS cluster is in a different region
-  EKS_CLUSTER_NAME: citadel-eks-cluster # Must match the name defined in terraform/variables.tf
-  ECR_REPOSITORY: p20000/sentinel-app
-  
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: citadel-eks-cluster
+  ECR_REPOSITORY: sentinel-app
+
 jobs:
   # 1. 🏗️ THE GREAT LAND GRANT (Provisioning with Terraform)
   provision_infrastructure:
     runs-on: ubuntu-latest
-    
     steps:
       - name: 📥 Summon Code Scroll
         uses: actions/checkout@v4
@@ -28,41 +26,36 @@ jobs:
       - name: 🔑 Assume IAM Role via OIDC (For Terraform)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # !!! IMPORTANT: Replace this ARN with the ARN of the IAM Role you created in the previous step.
-          role-to-assume: arn:aws:iam::982534376726:role/GitHubActions-EKS-Deployer 
+          role-to-assume: arn:aws:iam::982534376726:role/GitHubActions-EKS-Deployer
           aws-region: ${{ env.AWS_REGION }}
-          
+
       - name: 🏗️ Setup Terraform CLI
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.0.0
-          
-      - name: 📜 Terraform Init (Initialize working directory)
-        id: init
+
+      - name: 📜 Terraform Init
         run: terraform init
         working-directory: ./terraform
-        
-      - name: 🔨 Terraform Apply (Provision EKS Cluster)
-        id: apply
-        # This command provisions the VPC, EKS cluster, and Node Group.
+
+      - name: 🔨 Terraform Apply
         run: terraform apply -auto-approve
         working-directory: ./terraform
 
   # 2. ⚔️ THE MARCH OF DELIVERANCE (Build, Configure, and Deploy)
   deploy_application:
-    needs: provision_infrastructure # Must wait for the cluster to be provisioned
+    needs: provision_infrastructure
     runs-on: ubuntu-latest
-    
     steps:
       - name: 📥 Summon Code Scroll
         uses: actions/checkout@v4
-        
+
       - name: 🔑 Assume IAM Role via OIDC (For Docker/Kubectl)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActions-EKS-Deployer
+          role-to-assume: arn:aws:iam::982534376726:role/GitHubActions-EKS-Deployer
           aws-region: ${{ env.AWS_REGION }}
-          
+
       - name: 🐳 Login to Docker Hub (or ECR)
         uses: docker/login-action@v3
         with:
@@ -74,29 +67,25 @@ jobs:
         with:
           context: ./app
           push: true
-          # Tags the image with the latest commit SHA for unique versions
           tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
-      - name: 📜 Configure Kubectl (Connect to the K8s Stronghold)
-        # Retrieves the Kubeconfig credentials using the assumed IAM Role
+      - name: 📜 Configure Kubectl
         run: |
           aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
-          
+
       - name: 📦 Install Ansible & Dependencies
         run: |
-          pip install ansible kubernetes # Install Ansible and the Python K8s library it needs
+          python -m pip install --upgrade pip
+          python -m pip install ansible kubernetes
 
-      - name: 🟢 Sentinel Update: Mark Build Stage GREEN
-        # This Ansible playbook/role updates the app/state_data.json
+      - name: 🟢 Mark Build Stage GREEN
         run: |
-          ansible-playbook -i localhost, ./ansible/main-deploy-playbook.yml --extra-vars 'stage_name=build_and_push status=GREEN image_tag=${{ github.sha }}'
+          ansible-playbook -i ./ansible/inventory.ini ./ansible/main-playbook.yml --extra-vars "stage_name=build_and_push status=GREEN image_tag=${{ github.sha }}"
 
       - name: ⚔️ Deploy Garrison (Ansible Deployment to K8s)
-        # This playbook uses the K8s module to apply the deployment manifest
         run: |
-          ansible-playbook -i localhost, ./ansible/main-deploy-playbook.yml --extra-vars 'stage_name=deploy_garrison status=RUNNING image_tag=${{ github.sha }}'
-          
-      - name: 🟢 Sentinel Update: Mark Deploy Stage GREEN
-        # Final update to signal success to the Sentinel App
+          ansible-playbook -i ./ansible/inventory.ini ./ansible/main-playbook.yml --extra-vars "stage_name=deploy_garrison status=RUNNING image_tag=${{ github.sha }}"
+
+      - name: 🟢 Mark Deploy Stage GREEN
         run: |
-          ansible-playbook -i localhost, ./ansible/main-deploy-playbook.yml --extra-vars 'stage_name=deploy_garrison status=GREEN image_tag=${{ github.sha }}'
+          ansible-playbook -i ./ansible/inventory.ini ./ansible/main-playbook.yml --extra-vars "stage_name=deploy_garrison status=GREEN image_tag=${{ github.sha }}"
